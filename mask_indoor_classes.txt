@@ -1,0 +1,5 @@
+door
+knife
+phone
+scissor
+water_bottle
