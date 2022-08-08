@@ -15,7 +15,7 @@ import util.misc as utils
 from datasets import build_dataset, get_coco_api_from_dataset
 from engine import evaluate, train_one_epoch
 from models import build_model
-
+from torchsummary import summary
 
 def get_args_parser():
     parser = argparse.ArgumentParser('Set transformer detector', add_help=False)
@@ -121,6 +121,8 @@ def main(args):
     random.seed(seed)
 
     model, criterion, postprocessors = build_model(args)
+    summary(model, (3, 800, 800), batch_size=-1, device="cpu")
+    exit(0)
     model.to(device)
 
     model_without_ddp = model

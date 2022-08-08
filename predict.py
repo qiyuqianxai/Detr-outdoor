@@ -6,6 +6,94 @@ from PIL import Image
 import torchvision.transforms as T
 # from models import build_model
 # from train import args
+import argparse
+
+def get_args_parser_predict(custom_param):
+
+    parser = argparse.ArgumentParser('Set transformer detector', add_help=False)
+    parser.add_argument('--lr', default=custom_param.lr, type=float)
+    parser.add_argument('--lr_backbone', default=1e-5, type=float)
+    parser.add_argument('--batch_size', default=custom_param.batch_size, type=int)
+    parser.add_argument('--weight_decay', default=custom_param.weight_decay, type=float)
+    parser.add_argument('--epochs', default=custom_param.epochs, type=int)
+    parser.add_argument('--lr_drop', default=custom_param.lr_drop, type=int)
+    parser.add_argument('--clip_max_norm', default=0.1, type=float,
+                        help='gradient clipping max norm')
+
+    # Model parameters
+    parser.add_argument('--frozen_weights', type=str, default=None,
+                        help="Path to the pretrained model. If set, only the mask head will be trained")
+    # * Backbone
+    parser.add_argument('--backbone', default='resnet50', type=str,
+                        help="Name of the convolutional backbone to use")
+    parser.add_argument('--dilation', action='store_true',
+                        help="If true, we replace stride with dilation in the last convolutional block (DC5)")
+    parser.add_argument('--position_embedding', default='sine', type=str, choices=('sine', 'learned'),
+                        help="Type of positional embedding to use on top of the image features")
+
+    # * Transformer
+    parser.add_argument('--enc_layers', default=6, type=int,
+                        help="Number of encoding layers in the transformer")
+    parser.add_argument('--dec_layers', default=6, type=int,
+                        help="Number of decoding layers in the transformer")
+    parser.add_argument('--dim_feedforward', default=2048, type=int,
+                        help="Intermediate size of the feedforward layers in the transformer blocks")
+    parser.add_argument('--hidden_dim', default=256, type=int,
+                        help="Size of the embeddings (dimension of the transformer)")
+    parser.add_argument('--dropout', default=0.1, type=float,
+                        help="Dropout applied in the transformer")
+    parser.add_argument('--nheads', default=8, type=int,
+                        help="Number of attention heads inside the transformer's attentions")
+    parser.add_argument('--num_queries', default=100, type=int,
+                        help="Number of query slots")
+    parser.add_argument('--pre_norm', action='store_true')
+
+    # * Segmentation
+    parser.add_argument('--masks', action='store_true',
+                        help="Train segmentation head if the flag is provided")
+
+    # Loss
+    parser.add_argument('--no_aux_loss', dest='aux_loss', action='store_false',
+                        help="Disables auxiliary decoding losses (loss at each layer)")
+    # * Matcher
+    parser.add_argument('--set_cost_class', default=1, type=float,
+                        help="Class coefficient in the matching cost")
+    parser.add_argument('--set_cost_bbox', default=5, type=float,
+                        help="L1 box coefficient in the matching cost")
+    parser.add_argument('--set_cost_giou', default=2, type=float,
+                        help="giou box coefficient in the matching cost")
+    # * Loss coefficients
+    parser.add_argument('--mask_loss_coef', default=1, type=float)
+    parser.add_argument('--dice_loss_coef', default=1, type=float)
+    parser.add_argument('--bbox_loss_coef', default=5, type=float)
+    parser.add_argument('--giou_loss_coef', default=2, type=float)
+    parser.add_argument('--eos_coef', default=0.1, type=float,
+                        help="Relative classification weight of the no-object class")
+
+    # dataset parameters
+    parser.add_argument('--num_classes', default=custom_param.num_classes, type=int,
+                        help='#classes in your dataset, which can override the value hard-coded in file models/detr.py')
+    parser.add_argument('--dataset_file', default=custom_param.dataset_file)
+    parser.add_argument('--coco_path', default=custom_param.coco_path, type=str)
+    parser.add_argument('--coco_panoptic_path', type=str)
+    parser.add_argument('--remove_difficult', action='store_true')
+
+    parser.add_argument('--output_dir', default=custom_param.output_dir,
+                        help='path where to save, empty for no saving')
+    parser.add_argument('--device', default=custom_param.device,
+                        help='device to use for training / testing')
+    parser.add_argument('--seed', default=custom_param.seed, type=int)
+    parser.add_argument('--resume', default=custom_param.resume, help='resume from checkpoint')
+    parser.add_argument('--start_epoch', default=0, type=int, metavar='N',
+                        help='start epoch')
+    parser.add_argument('--eval', action='store_true')
+    parser.add_argument('--num_workers', default=custom_param.num_workers, type=int)
+
+    # distributed training parameters
+    parser.add_argument('--world_size', default=3, type=int,
+                        help='number of distributed processes')
+    parser.add_argument('--dist_url', default='env://', help='url used to set up distributed training')
+    return parser
 
 # 读取分类标签
 with open("mask_outdoor_classes.txt", "r")as f:
@@ -54,7 +142,7 @@ def filter_bboxes_from_outputs(outputs,
 
 # 将框，分类，score等信息绘制到图片上并显示和保存
 def plot_finetuned_results(pil_img, prob=None, boxes=None):
-    global img_name
+#     global img_name
     plt.figure(figsize=(16, 10))
     plt.imshow(pil_img)
     ax = plt.gca()
@@ -69,7 +157,7 @@ def plot_finetuned_results(pil_img, prob=None, boxes=None):
                     bbox=dict(facecolor='yellow', alpha=0.5))
     plt.axis('off')
     plt.show()
-    plt.savefig(img_name.split("/")[-1].replace(".jpg","")+"_result.jpg")
+#     plt.savefig(img_name.split("/")[-1].replace(".jpg","")+"_result.jpg")
 
 # 用模型对图片进行预测，并绘制框，类别等信息
 def run_worflow(my_image, my_model):
@@ -160,31 +248,31 @@ def video_predict(video_pth=None):
 
 import time
 import datetime
-def img_predict(img_pth):
-    global img_name
-    # 读取模型网络
-    # model, _, _ = build_model(args)
-    # 也可以从GitHub上读取模型网络
-    model = torch.hub.load('facebookresearch/detr',
-                           'detr_resnet50',
-                           pretrained=False,
-                           num_classes=num_classes)
+# def img_predict(img_pth):
+#     global img_name
+#     # 读取模型网络
+#     # model, _, _ = build_model(args)
+#     # 也可以从GitHub上读取模型网络
+#     model = torch.hub.load('facebookresearch/detr',
+#                            'detr_resnet50',
+#                            pretrained=False,
+#                            num_classes=num_classes)
 
-    # 读取自己训练好的模型权重
-    checkpoint = torch.load('outputs/checkpoint.pth',
-                            map_location='cpu')
+#     # 读取自己训练好的模型权重
+#     checkpoint = torch.load('outputs/checkpoint.pth',
+#                             map_location='cpu')
 
-    model.load_state_dict(checkpoint['model'],
-                          strict=False)
+#     model.load_state_dict(checkpoint['model'],
+#                           strict=False)
 
-    model.eval()
+#     model.eval()
 
-    # 读取图片进行预测
-    img_name = img_pth
-    im = Image.open(img_name)
-    run_worflow(im, model)
+#     # 读取图片进行预测
+#     img_name = img_pth
+#     im = Image.open(img_name)
+#     run_worflow(im, model)
 
-img_name = ""
+# img_name = ""
 
 if __name__ == '__main__':
     # 预测图片
